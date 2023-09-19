@@ -8,8 +8,6 @@ from viam.logging import getLogger
 
 from MQTT_Integration import MQTT_Integration 
 
-from utils import thread_mgr
-
 logger = getLogger(__name__)
 
 thread_mgr = None

@@ -40,7 +40,6 @@ class MQTT_Integration(Sensor):
         sensor.host = None 
         sensor.port = None
         sensor.qos = None
-        sensor.msg = None
         sensor.thread = None
         sensor.reconfigure(config, dependencies)
         return sensor
@@ -68,14 +67,17 @@ class MQTT_Integration(Sensor):
         return []
 
     def reconfigure(self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]):
-        self.exit_flag = 1
         self.topic = config.attributes.fields['topic'].string_value
         self.host =config.attributes.fields['host'].string_value
-        self.port = config.attributes.fields['port'].string_value
-        self.qos = config.attributes.fields['qos'].string_value
-        logger.info("reconfigured... starting thread")
-        self.thread = myThread(self, 1, "Thread-1", 1, self.topic, self.host, self.port, self.qos)
-        self.thread.message.payload = None
+        self.port = int(config.attributes.fields['port'].number_value)
+        self.qos = int(config.attributes.fields['qos'].number_value)
+        # logger.info("reconfigured... starting thread")
+        self.thread = myThread(1, "Thread-1", 1, self.topic, self.host, self.port, self.qos)
+        self.thread.message = {
+            'topic': None,
+            'payload': None,
+            'qos': None
+        }
         self.thread.run()
 
     async def get_readings(self, extra: Optional[Dict[str, Any]] = None, **kwargs) -> Mapping[str, Any]:
@@ -83,7 +85,7 @@ class MQTT_Integration(Sensor):
             return self.thread.message.payload
         except AttributeError:
             return {
-                'Payload': None
+                'payload': None
             }
 
 class myThread (threading.Thread):
@@ -111,8 +113,8 @@ class myThread (threading.Thread):
         }
 
 
-    def run(self, topic, host, port, qos):
-        print("Starting " + self.name)
+    def run(self):
+        # logger.info("Starting " + self.name)
         self.running = True
         self.loop()
 
@@ -120,8 +122,8 @@ class myThread (threading.Thread):
         self.running = False
 
     def on_connect(self, client, userdata, flags, rc):
-        # print('connected (%s)' % client._client_id)
-        client.subscribe(topic= self.aranet_topic, qos= self.aranet_qos)
+        # # logger.info('connected (%s)' % client._client_id)
+        client.subscribe(topic= self.topic, qos= self.qos)
 
     def on_message(self, client, userdata, message):
         # print('------------------------------')
@@ -133,16 +135,19 @@ class myThread (threading.Thread):
         self.message = message
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
-        print("Subscribed: " + str(mid) + " " + str(granted_qos))
+        logger.info("Subscribed: " + str(mid) + " " + str(granted_qos))
 
     def loop(self):
-        #while not self.parent.exit_flag:
         client = paho.mqtt.client.Client()
         client.on_connect = self.on_connect
         client.on_subscribe = self.on_subscribe
         client.on_message = self.on_message
-        client.connect(host=self.host, port=self.port)
+        logger.info('Attempting connection on client to host... %s' % client)
+        logger.info('Host: %s' % self.host)
+        logger.info('Port: %s' % self.port)
+        client.connect(self.host, self.port)
         client.subscribe(self.topic, self.qos)
+        logger.info('Attempting Looping %s' % self.running)
         while self.running:
             client.loop_forever()
 
