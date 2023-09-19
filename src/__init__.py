@@ -1,0 +1,7 @@
+# MQTT_Integration_Example/src/__init__.py
+from viam.components.sensor import Sensor
+from viam.resource.registry import Registry, ResourceCreatorRegistration
+from MQTT_Integration import MQTT_Integration
+
+
+# Registry.register_resource_creator(Sensor.SUBTYPE, MQTT_Integration.MODEL, ResourceCreatorRegistration(MQTT_Integration.new))
