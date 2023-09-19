@@ -74,9 +74,9 @@ class MQTT_Integration(Sensor):
         self.port = config.attributes.fields['port'].string_value
         self.qos = config.attributes.fields['qos'].string_value
         logger.info("reconfigured... starting thread")
-        self.thread = myThread(self, 1, "Thread-1", 1)
+        self.thread = myThread(self, 1, "Thread-1", 1, self.topic, self.host, self.port, self.qos)
         self.thread.message.payload = None
-        self.thread.start()
+        self.thread.run()
 
     async def get_readings(self, extra: Optional[Dict[str, Any]] = None, **kwargs) -> Mapping[str, Any]:
         try:
@@ -92,13 +92,17 @@ class myThread (threading.Thread):
 
     message = None
 
-    def __init__(self, threadID, name, counter):
+    def __init__(self, threadID, name, counter, topic, host, port, qos):
         threading.Thread.__init__(self)
+        # Thread Info
         self.threadID = threadID
         self.name = name
         self.counter = counter
-        self.aranet_topic = '#'
-        self.aranet_qos = 0
+        # MQTT Info
+        self.topic = topic
+        self.host = host
+        self.port = port
+        self.qos = qos
         self.running = False
         self.message = {
             'topic': None,
@@ -106,7 +110,8 @@ class myThread (threading.Thread):
             'qos': None
         }
 
-    def run(self):
+
+    def run(self, topic, host, port, qos):
         print("Starting " + self.name)
         self.running = True
         self.loop()
@@ -136,14 +141,14 @@ class myThread (threading.Thread):
         client.on_connect = self.on_connect
         client.on_subscribe = self.on_subscribe
         client.on_message = self.on_message
-        client.connect(host='10.1.5.254', port=1883)
-        client.subscribe('aranet/358151004965/sensors/6009F3/json/measurements', 0)
+        client.connect(host=self.host, port=self.port)
+        client.subscribe(self.topic, self.qos)
         while self.running:
             client.loop_forever()
 
 
 # Anything below this line is optional, but may come in handy for debugging and testing.
-# To use, call `python wifi_sensor.py` in the command line while in the `src` directory.
+# To use, call `python MQTT_Integration.py` in the command line while in the `src` directory.
 async def main():
     print("-----Try Thread Start-----")
     mqtt_client_sensor = MQTT_Integration(name="MQTT_Integration")
