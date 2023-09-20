@@ -47,7 +47,7 @@ class MQTT_Integration(Sensor):
     @classmethod
     def validate_config(cls, config: ComponentConfig) -> Sequence[str]:
         topic = config.attributes.fields['topic'].string_value
-        host =config.attributes.fields['host'].string_value
+        host = config.attributes.fields['host'].string_value
         port = config.attributes.fields['port'].string_value
         qos = config.attributes.fields['qos'].string_value
 
@@ -122,7 +122,7 @@ class myThread (threading.Thread):
         self.running = False
 
     def on_connect(self, client, userdata, flags, rc):
-        # # logger.info('connected (%s)' % client._client_id)
+        logger.info('connected (%s)' % client._client_id)
         client.subscribe(topic= self.topic, qos= self.qos)
 
     def on_message(self, client, userdata, message):
