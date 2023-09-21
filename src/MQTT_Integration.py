@@ -15,6 +15,7 @@ from viam.logging import getLogger
 import ssl
 import sys
 import paho.mqtt.client
+import json
 
 import threading
 
@@ -22,16 +23,83 @@ import time
 
 logger = getLogger(__name__)
 
+class myThread (threading.Thread):
+    # create a lock
+    lock = threading.Lock()
+
+    message = None
+
+    def __init__(self, threadID, name, counter, topic, host, port, qos):
+        threading.Thread.__init__(self)
+        # Thread Info
+        self.threadID = threadID
+        self.name = name
+        self.counter = counter
+        # MQTT Info
+        self.topic = topic
+        self.host = host
+        self.port = port
+        self.qos = qos
+        self.lock = threading.Lock()
+        self.running = False
+        self.message = {
+            'topic': None,
+            'payload': 'NOT_INITIALIZED',
+            'qos': None
+        }
+
+
+    def run(self):
+        # logger.info("Starting " + self.name)
+        self.running = True
+        self.loop()
+
+    def shutdown(self):
+        self.running = False
+
+    def on_connect(self, client, userdata, flags, rc):
+        logger.info('connected (%s)' % client._client_id)
+        client.subscribe(topic= self.topic, qos= self.qos)
+
+    def on_message(self, client, userdata, message):
+        logger.info(f'msg: {message}')
+        logger.info(f'msg info: {dir(message)}')
+        # print('------------------------------')
+        # print('client: %s' % client)
+        # print('userdata: %s' % userdata)
+        # print('topic: %s' % message.topic)
+        # print('payload: %s' % message.payload)
+        # print('qos: %d' % message.qos)
+        with self.lock:
+            self.message = message
+
+    def on_subscribe(self, client, userdata, mid, granted_qos):
+        logger.info("Subscribed: " + str(mid) + " " + str(granted_qos))
+
+    def loop(self):
+        client = paho.mqtt.client.Client()
+        client.on_connect = self.on_connect
+        client.on_subscribe = self.on_subscribe
+        client.on_message = self.on_message
+        logger.info('Attempting connection on client to host... %s' % client)
+        logger.info('Host: %s' % self.host)
+        logger.info('Port: %s' % self.port)
+        client.connect(self.host, self.port)
+        client.subscribe(self.topic, self.qos)
+        logger.info('Attempting Looping %s' % self.running)
+        while self.running:
+            client.loop_forever()
+
 class MQTT_Integration(Sensor):
     # Subclass the Viam Sensor component and implement the required functions
     MODEL: ClassVar[Model] = Model(ModelFamily("viamlabs","mqtt_integration"), "json")
-    topic = None
-    host = None 
-    port = None
-    qos = None
-    msg = None
-    thread = None
-    exit_flag = 0
+    topic: str
+    host: str 
+    port: int
+    qos: int
+    msg: Dict[str, Any]
+    thread: myThread
+    exit_flag: int
 
     @classmethod
     def new(cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]) -> Self:
@@ -41,6 +109,7 @@ class MQTT_Integration(Sensor):
         sensor.port = None
         sensor.qos = None
         sensor.thread = None
+        sensor.exit_flag = 1
         sensor.reconfigure(config, dependencies)
         return sensor
 
@@ -52,7 +121,7 @@ class MQTT_Integration(Sensor):
         qos = config.attributes.fields['qos'].string_value
 
         if topic == '':
-            logger.warning('no topic to listen to...')
+            logger.warning('no topic to listen to... use \'#\' as a wild card...')
         
         if host == '':
             logger.warning('no host to connect to...')
@@ -72,101 +141,31 @@ class MQTT_Integration(Sensor):
         self.port = int(config.attributes.fields['port'].number_value)
         self.qos = int(config.attributes.fields['qos'].number_value)
         # logger.info("reconfigured... starting thread")
+        if self.thread is not None:
+            self.thread.join()
         self.thread = myThread(1, "Thread-1", 1, self.topic, self.host, self.port, self.qos)
-        self.thread.message = {
-            'topic': None,
-            'payload': None,
-            'qos': None
-        }
-        self.thread.run()
+        self.thread.start()
 
     async def get_readings(self, extra: Optional[Dict[str, Any]] = None, **kwargs) -> Mapping[str, Any]:
+        msg = self.thread.message
+        decodedmsg = msg.payload.decode()
         try:
-            return self.thread.message.payload
-        except AttributeError:
+            result = json.loads(decodedmsg)
+        except:
+            print('------------------------------')
+            print("A JSON Decode Error Occured... message isn't JSON")
+            print('------------------------------')
+            result = decodedmsg
+        finally:
+            print('------------------------------')
+            print('topic: %s' % msg.topic)
+            print('payload: %s' % msg)
+            print('decoded: %s' % decodedmsg)
+            print('json: %s' % result)
+            print('qos: %d' % msg.qos)
             return {
-                'payload': None
-            }
-
-class myThread (threading.Thread):
-    # create a lock
-    lock = threading.Lock()
-
-    message = None
-
-    def __init__(self, threadID, name, counter, topic, host, port, qos):
-        threading.Thread.__init__(self)
-        # Thread Info
-        self.threadID = threadID
-        self.name = name
-        self.counter = counter
-        # MQTT Info
-        self.topic = topic
-        self.host = host
-        self.port = port
-        self.qos = qos
-        self.running = False
-        self.message = {
-            'topic': None,
-            'payload': None,
-            'qos': None
-        }
-
-
-    def run(self):
-        # logger.info("Starting " + self.name)
-        self.running = True
-        self.loop()
-
-    def shutdown(self):
-        self.running = False
-
-    def on_connect(self, client, userdata, flags, rc):
-        logger.info('connected (%s)' % client._client_id)
-        client.subscribe(topic= self.topic, qos= self.qos)
-
-    def on_message(self, client, userdata, message):
-        # print('------------------------------')
-        # print('client: %s' % client)
-        # print('userdata: %s' % userdata)
-        # print('topic: %s' % message.topic)
-        # print('payload: %s' % message.payload)
-        # print('qos: %d' % message.qos)
-        self.message = message
-
-    def on_subscribe(self, client, userdata, mid, granted_qos):
-        logger.info("Subscribed: " + str(mid) + " " + str(granted_qos))
-
-    def loop(self):
-        client = paho.mqtt.client.Client()
-        client.on_connect = self.on_connect
-        client.on_subscribe = self.on_subscribe
-        client.on_message = self.on_message
-        logger.info('Attempting connection on client to host... %s' % client)
-        logger.info('Host: %s' % self.host)
-        logger.info('Port: %s' % self.port)
-        client.connect(self.host, self.port)
-        client.subscribe(self.topic, self.qos)
-        logger.info('Attempting Looping %s' % self.running)
-        while self.running:
-            client.loop_forever()
-
-
-# Anything below this line is optional, but may come in handy for debugging and testing.
-# To use, call `python MQTT_Integration.py` in the command line while in the `src` directory.
-async def main():
-    print("-----Try Thread Start-----")
-    mqtt_client_sensor = MQTT_Integration(name="MQTT_Integration")
-    mqtt_client_sensor.thread = myThread(1, "thread", 1)
-    mqtt_client_sensor.thread.start()
-    print("-----Thread Started-----")
-    while True:   
-        message = await mqtt_client_sensor.get_readings()
-        print("READ....")
-        print(message, mqtt_client_sensor, mqtt_client_sensor.thread)
-        # print(dir(mqtt_client_sensor))
-        print("SLEEP....")
-        time.sleep(10)
-
-if __name__ == '__main__':
-    asyncio.run(main())
+                'topic_from_message': msg.topic,
+                'payload': result,
+                'qos': msg.qos,
+                'retain': msg.retain
+                }
