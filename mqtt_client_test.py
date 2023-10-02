@@ -1,6 +1,9 @@
 import ssl
 import sys
 
+import json
+import urllib.request
+
 import paho.mqtt.client
 
 def on_connect(client, userdata, flags, rc):
@@ -8,10 +11,22 @@ def on_connect(client, userdata, flags, rc):
 	client.subscribe(topic='#', qos=2)
 
 def on_message(client, userdata, message):
-	print('------------------------------')
-	print('topic: %s' % message.topic)
-	print('payload: %s' % message.payload)
-	print('qos: %d' % message.qos)
+	msg = message.payload
+	decodedmsg = msg.decode()
+	try:
+		result = json.loads(decodedmsg)
+	except:
+		print('------------------------------')
+		print("A JSON Decode Error Occured... message isn't JSON")
+		print('------------------------------')
+		result = decodedmsg
+	finally:
+		print('------------------------------')
+		print('topic: %s' % message.topic)
+		print('payload: %s' % msg)
+		print('decoded: %s' % decodedmsg)
+		print('json: %s' % result)
+		print('qos: %d' % message.qos)
 
 def loop():
 	client = paho.mqtt.client.Client()

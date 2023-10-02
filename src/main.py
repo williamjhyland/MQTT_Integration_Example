@@ -22,23 +22,6 @@ async def main():
     module.add_model_from_registry(Sensor.SUBTYPE, MQTT_Integration.MODEL)
     await module.start()
 
-    try:
-        global thread_mgr
-        global viam_mqtt_client
-        logger.info('starting viam_mqtt_client')
-
-        # setup viam_mqtt_client
-        thread_mgr = thread_mgr.get_instance()
-        viam_mqtt_client = viam_mqtt_client.get_viam_mqtt_client()
-        thread_mgr.spin_and_add_node(viam_mqtt_client)
-
-        module = Module.from_args()
-        module.add_model_from_registry(Sensor.SUBTYPE, MQTT_Integration.MODEL)
-        await module.start()
-    finally:
-        thread_mgr.shutdown()
-
-
 
 if __name__ == "__main__":
     asyncio.run(main())
