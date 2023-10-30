@@ -1,5 +1,8 @@
 # What is MQTT?
 The MQTT protocol is the de-facto standard for IoT messaging. Standardized by OASIS and ISO, MQTT publish/subscribe protocol provides a scalable and reliable way to connect devices over the Internet. Today, MQTT is used by many companies to connect millions of devices to the Internet.
+
+MQTT decouples the publisher and subscriber spatially, meaning they only need to know the broker’s hostname/IP and port to publish or receive messages.
+
 # MQTT_Integration_Example
 ## Set up venv
 Run "bash setup_venv.sh" to create the python environment and install the requirements then reboot the device.
@@ -14,8 +17,8 @@ Run "bash setup_venv.sh" to create the python environment and install the requir
      - USA/California/San Francisco/Silicon Valley: This topic hierarchy can track or exchange information about events or data related to the Silicon Valley area in San Francisco, California, within the United States.
      - 5ff4a2ce-e485-40f4-826c-b1a5d81be9b6/status: This topic could be used to monitor the status of a specific device or system identified by its unique identifier.
      - Germany/Bavaria/car/2382340923453/latitude: This topic structure could be utilized to share the latitude coordinates of a particular car in the region of Bavaria, Germany.
-  * "host": "10.1.8.247",
-  * "port": 1883
+  * "host": The broker’s hostname/IP
+  * "port": The broker’s port
 ### Example:
 {
   "qos": 0,
