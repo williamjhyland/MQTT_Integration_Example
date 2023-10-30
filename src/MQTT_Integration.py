@@ -27,8 +27,6 @@ class myThread (threading.Thread):
     # create a lock
     lock = threading.Lock()
 
-    message = None
-
     def __init__(self, threadID, name, counter, topic, host, port, qos):
         threading.Thread.__init__(self)
         # Thread Info
@@ -43,10 +41,12 @@ class myThread (threading.Thread):
         self.lock = threading.Lock()
         self.running = False
         self.message = {
-            'topic': None,
-            'payload': 'NOT_INITIALIZED',
-            'qos': None
+            'topic': "None",
+            'payload': "None",
+            'qos': 1,
+            'retain': "None"
         }
+    
 
 
     def run(self):
@@ -55,15 +55,16 @@ class myThread (threading.Thread):
         self.loop()
 
     def shutdown(self):
-        self.running = False
+        self.logger.info('shutting down MQTT Client & joining threads')
+        self.join()
 
     def on_connect(self, client, userdata, flags, rc):
-        logger.info('connected (%s)' % client._client_id)
+        # logger.info('connected (%s)' % client._client_id)
         client.subscribe(topic= self.topic, qos= self.qos)
 
     def on_message(self, client, userdata, message):
-        logger.info(f'msg: {message}')
-        logger.info(f'msg info: {dir(message)}')
+        # logger.info(f'msg: {message}')
+        # logger.info(f'msg info: {dir(message)}')
         # print('------------------------------')
         # print('client: %s' % client)
         # print('userdata: %s' % userdata)
@@ -74,21 +75,24 @@ class myThread (threading.Thread):
             self.message = message
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
-        logger.info("Subscribed: " + str(mid) + " " + str(granted_qos))
+        logger.info("Subscribed... ")
 
     def loop(self):
         client = paho.mqtt.client.Client()
         client.on_connect = self.on_connect
         client.on_subscribe = self.on_subscribe
         client.on_message = self.on_message
-        logger.info('Attempting connection on client to host... %s' % client)
+        # logger.info('Attempting connection on client to host... %s' % client)
         logger.info('Host: %s' % self.host)
         logger.info('Port: %s' % self.port)
         client.connect(self.host, self.port)
         client.subscribe(self.topic, self.qos)
-        logger.info('Attempting Looping %s' % self.running)
+        # logger.info('Attempting Looping %s' % self.running)
         while self.running:
             client.loop_forever()
+        if not self.running:
+            client.disconnect()
+            self.shutdown()
 
 class MQTT_Integration(Sensor):
     # Subclass the Viam Sensor component and implement the required functions
@@ -120,6 +124,8 @@ class MQTT_Integration(Sensor):
         port = config.attributes.fields['port'].string_value
         qos = config.attributes.fields['qos'].string_value
 
+        qos = config.attributes.fields['matt_test'].string_value
+
         if topic == '':
             logger.warning('no topic to listen to... use \'#\' as a wild card...')
         
@@ -144,28 +150,39 @@ class MQTT_Integration(Sensor):
         if self.thread is not None:
             self.thread.join()
         self.thread = myThread(1, "Thread-1", 1, self.topic, self.host, self.port, self.qos)
+        self.thread.setDaemon(True)
         self.thread.start()
 
     async def get_readings(self, extra: Optional[Dict[str, Any]] = None, **kwargs) -> Mapping[str, Any]:
-        msg = self.thread.message
-        decodedmsg = msg.payload.decode()
         try:
-            result = json.loads(decodedmsg)
-        except:
-            print('------------------------------')
-            print("A JSON Decode Error Occured... message isn't JSON")
-            print('------------------------------')
-            result = decodedmsg
-        finally:
-            print('------------------------------')
-            print('topic: %s' % msg.topic)
-            print('payload: %s' % msg)
-            print('decoded: %s' % decodedmsg)
-            print('json: %s' % result)
-            print('qos: %d' % msg.qos)
+            msg = self.thread.message
+            logger.info(msg)
+            decodedmsg = msg.payload.decode()            
+            try:
+                result = json.loads(decodedmsg)
+            except:
+                print('------------------------------')
+                print("A JSON Decode Error Occured... message isn't JSON")
+                print('------------------------------')
+                result = decodedmsg
+            finally:
+                # print('------------------------------')
+                # print('topic: %s' % msg.topic)
+                # print('payload: %s' % msg)
+                # print('decoded: %s' % decodedmsg)
+                # print('json: %s' % result)
+                # print('qos: %d' % msg.qos)
+                return {
+                    'topic_from_message': msg.topic,
+                    'payload': result,
+                    'qos': msg.qos,
+                    'retain': msg.retain
+                    }
+        except AttributeError:
+            logger.warning("AttributeError... likely no messages received yet...")
             return {
-                'topic_from_message': msg.topic,
-                'payload': result,
-                'qos': msg.qos,
-                'retain': msg.retain
-                }
+                    'topic_from_message': 'None',
+                    'payload': 'None',
+                    'qos': 'None',
+                    'retain': 'None',
+                    }
