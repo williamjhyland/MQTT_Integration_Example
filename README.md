@@ -7,6 +7,10 @@ MQTT decouples the publisher and subscriber spatially, meaning they only need to
 ## How does this module work?
 The modules main.py adds the module to the Viam registry. The script MQTT_Integration contains the get_readings() method that a Viam sensor must fulfill. The module spins up a MyThread class to manage clients. The client created by the module senda a SUBSCRIBE message to the broker with the topic of interest in the configuration.
 
+The modules on_message() method is called whenever the broker sends a message down to the client. This overwrites an internal attribute called message which is referenced whenever the get_readings() method is called.
+
+Separately there is some basic logging on start up to confirm that subscriptions occured appropriately and the configuration is valid.
+
 Run "bash setup_venv.sh" to create the python environment and install the requirements then reboot the device.
 ## Sensor Configuration:
 ### Parameters:
