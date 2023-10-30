@@ -4,7 +4,9 @@ The MQTT protocol is the de-facto standard for IoT messaging. Standardized by OA
 MQTT decouples the publisher and subscriber spatially, meaning they only need to know the broker’s hostname/IP and port to publish or receive messages.
 
 # MQTT_Integration_Example
-## Set up venv
+## How does this module work?
+The modules main.py adds the module to the Viam registry. The script MQTT_Integration contains the get_readings() method that a Viam sensor must fulfill. The module spins up a MyThread class to manage clients. The client created by the module senda a SUBSCRIBE message to the broker with the topic of interest in the configuration.
+
 Run "bash setup_venv.sh" to create the python environment and install the requirements then reboot the device.
 ## Sensor Configuration:
 ### Parameters:
