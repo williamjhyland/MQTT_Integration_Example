@@ -1,0 +1,13 @@
+{
+  "module_id": "bill:mqtt-subscriber",
+  "visibility": "public",
+  "url": "https://github.com/williamjhyland/MQTT_Integration_Example",
+  "description": "MQTT decouples the publisher and subscriber spatially, meaning they only need to know the broker’s hostname/IP and port to publish or receive messages.",
+  "models": [
+    {
+      "model": "bill:mqtt-subscriber:json",
+      "api": "rdk:component:sensor"
+    }
+  ],
+  "entrypoint": "run.sh"
+}

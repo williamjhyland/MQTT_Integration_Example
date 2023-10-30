@@ -96,7 +96,7 @@ class myThread (threading.Thread):
 
 class MQTT_Integration(Sensor):
     # Subclass the Viam Sensor component and implement the required functions
-    MODEL: ClassVar[Model] = Model(ModelFamily("viamlabs","mqtt_integration"), "json")
+    MODEL: ClassVar[Model] = Model(ModelFamily("bill","mqtt-subscriber"), "json")
     topic: str
     host: str 
     port: int
