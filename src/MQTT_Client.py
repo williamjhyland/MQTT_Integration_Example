@@ -5,6 +5,7 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
 from typing_extensions import Self
 
 from viam.components.sensor import Sensor
+from viam.components.component_base import ValueTypes
 from viam.operations import run_with_operation
 from viam.proto.app.robot import ComponentConfig
 from viam.proto.common import ResourceName
@@ -14,7 +15,8 @@ from viam.logging import getLogger
 
 import ssl
 import sys
-import paho.mqtt.client
+import paho.mqtt
+import paho.mqtt.publish as publish
 import json
 
 import threading
@@ -34,6 +36,7 @@ class myThread (threading.Thread):
         self.name = name
         self.counter = counter
         # MQTT Info
+        self.client = None
         self.topic = topic
         self.host = host
         self.port = port
@@ -78,25 +81,25 @@ class myThread (threading.Thread):
         logger.info("Subscribed... ")
 
     def loop(self):
-        client = paho.mqtt.client.Client()
-        client.on_connect = self.on_connect
-        client.on_subscribe = self.on_subscribe
-        client.on_message = self.on_message
+        self.client = paho.mqtt.client.Client()
+        self.client.on_connect = self.on_connect
+        self.client.on_subscribe = self.on_subscribe
+        self.client.on_message = self.on_message
         # logger.info('Attempting connection on client to host... %s' % client)
         logger.info('Host: %s' % self.host)
         logger.info('Port: %s' % self.port)
-        client.connect(self.host, self.port)
-        client.subscribe(self.topic, self.qos)
+        self.client.connect(self.host, self.port)
+        self.client.subscribe(self.topic, self.qos)
         # logger.info('Attempting Looping %s' % self.running)
         while self.running:
-            client.loop_forever()
+            self.client.loop_forever()
         if not self.running:
-            client.disconnect()
+            self.client.disconnect()
             self.shutdown()
 
-class MQTT_Integration(Sensor):
+class MQTT_Client(Sensor):
     # Subclass the Viam Sensor component and implement the required functions
-    MODEL: ClassVar[Model] = Model(ModelFamily("bill","mqtt-subscriber"), "json")
+    MODEL: ClassVar[Model] = Model(ModelFamily("bill","mqtt-client"), "json")
     topic: str
     host: str 
     port: int
@@ -186,3 +189,18 @@ class MQTT_Integration(Sensor):
                     'qos': 'None',
                     'retain': 'None',
                     }
+
+    async def do_command(
+            self,
+            command: Mapping[str, ValueTypes],
+            *,
+            timeout: Optional[float] = None,
+            **kwargs
+    ) -> Mapping[str, ValueTypes]:
+        msgs = command['msgs']
+        if len(msgs == 1):
+            self.thread.client.publish.single(msgs[0].topic, msgs[0].payload, command['hostname'])
+        elif len(msgs >= 1):
+            self.thread.client.publish.multiple(msgs, command['hostname'])
+        else:
+            pass

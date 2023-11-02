@@ -6,7 +6,7 @@ from viam.components.sensor import Sensor
 from viam.resource.registry import Registry, ResourceCreatorRegistration
 from viam.logging import getLogger
 
-from MQTT_Integration import MQTT_Integration 
+from src.MQTT_Client import MQTT_Integration 
 
 logger = getLogger(__name__)
 
