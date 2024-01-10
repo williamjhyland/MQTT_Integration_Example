@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"encoding/json"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"go.viam.com/rdk/components/sensor"
@@ -27,31 +28,33 @@ var Model = resource.NewModel("bill", "mqtt-go", "json-go")
 
 // Maps JSON component configuration attributes.
 type Config struct {
-	topic string `json:"topic"`
-	host  string `json:"host"`
-	port  int    `json:"port"`
-	qos   int    `json:"qos"`
+	Topic string `json:"topic"`
+	Host  string `json:"host"`
+	Port  int    `json:"port"`
+	QoS   int    `json:"qos"`
 }
+
+var payloadData map[string]interface{}
 
 // Implement component configuration validation and and return implicit dependencies.
 func (cfg *Config) Validate(path string) ([]string, error) {
 	// Check if the topic is set
-	if cfg.topic == "" {
+	if cfg.Topic == "" {
 		return nil, fmt.Errorf("topic is required for MQTT_Client %q", path)
 	}
 
 	// Check if the host is set
-	if cfg.host == "" {
+	if cfg.Host == "" {
 		return nil, fmt.Errorf("host is required for MQTT_Client %q", path)
 	}
 
 	// Check if the port is valid
-	if cfg.port <= 0 {
+	if cfg.Port <= 0 {
 		return nil, fmt.Errorf("invalid port (should be > 0) for MQTT_Client %q", path)
 	}
 
 	// Check if qos is within a valid range (usually 0 to 2 for MQTT)
-	if cfg.qos < 0 || cfg.qos > 2 {
+	if cfg.QoS < 0 || cfg.QoS > 2 {
 		return nil, fmt.Errorf("qos must be between 0 and 2 for MQTT_Client %q", path)
 	}
 
@@ -62,11 +65,11 @@ type MQTT_Client struct {
 	resource.Named
 	logger        logging.Logger
 	client        mqtt.Client
-	topic         string
-	host          string
-	port          int
-	qos           byte
-	latestMessage string
+	Topic         string
+	Host          string
+	Port          int
+	QoS           byte
+	latestMessage map[string]interface{}
 	mutex         sync.Mutex
 }
 
@@ -91,14 +94,37 @@ func (s *MQTT_Client) Reconfigure(ctx context.Context, deps resource.Dependencie
 		return err
 	}
 
+	// Stop existing MQTT client if connected
+	if s.client != nil && s.client.IsConnected() {
+		s.client.Disconnect(250) // Timeout in milliseconds
+	}
+
 	// Reconfigure the MQTT_Client instance with new settings from clientConfig
-	s.topic = clientConfig.topic
-	s.host = clientConfig.host
-	s.port = clientConfig.port
-	s.qos = byte(clientConfig.qos) // Assuming qos in Config is an int and needs conversion to byte
+	s.Topic = clientConfig.Topic
+	s.Host = clientConfig.Host
+	s.Port = clientConfig.Port
+	s.QoS = byte(clientConfig.QoS) // Assuming qos in Config is an int and needs conversion to byte
 
 	// Log the new configuration (optional, adjust logging as needed)
-	s.logger.Infof("Reconfigured MQTT_Client with topic: %s, host: %s, port: %d, qos: %d", s.topic, s.host, s.port, s.qos)
+	s.logger.Infof("Reconfigured MQTT_Client with topic: %s, host: %s, port: %d, qos: %d", s.Topic, s.Host, s.Port, s.QoS)
+
+    // Error handling channel
+    errChan := make(chan error, 1)
+
+    // Start InitMQTTClient in a goroutine
+    go func() {
+        errChan <- s.InitMQTTClient(ctx)
+        close(errChan)
+    }()
+
+    // Handle errors from the goroutine
+    for err := range errChan {
+        if err != nil {
+            // Handle error, e.g., log it or restart the initialization process
+            s.logger.Errorf("Error initializing MQTT client: %v", err)
+            // Take appropriate action based on the error
+        }
+    }
 
 	return err
 }
@@ -109,8 +135,10 @@ func (s *MQTT_Client) Readings(ctx context.Context, _ map[string]interface{}) (m
 	defer s.mutex.Unlock()
 
 	return map[string]interface{}{
-		"latestMessage": s.latestMessage,
-	}, nil
+        "payload":           s.latestMessage,
+        "qos":               int32(s.QoS),
+        "topic_from_message": s.Topic,
+    }, nil
 }
 
 // DoCommand can be implemented to extend sensor functionality but returns unimplemented in this example.
@@ -119,10 +147,10 @@ func (s *MQTT_Client) DoCommand(ctx context.Context, cmd map[string]interface{})
 }
 
 // New function to initialize MQTT client and start the goroutine
-func (s *MQTT_Client) InitMQTTClient(ctx context.Context, config MQTT_Client) error {
+func (s *MQTT_Client) InitMQTTClient(ctx context.Context) error {
 	// Create a client and connect to the broker
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.host, config.port))
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", s.Host, s.Port))
 	opts.SetClientID("your_client_id") // Set a unique client ID
 
 	s.client = mqtt.NewClient(opts)
@@ -132,15 +160,24 @@ func (s *MQTT_Client) InitMQTTClient(ctx context.Context, config MQTT_Client) er
 
 	// Start the goroutine to listen to the topic
 	go func() {
-		if token := s.client.Subscribe(config.topic, config.qos, func(client mqtt.Client, msg mqtt.Message) {
+		if token := s.client.Subscribe(s.Topic, s.QoS, func(client mqtt.Client, msg mqtt.Message) {
 			s.mutex.Lock()
-			s.latestMessage = string(msg.Payload())
-			s.mutex.Unlock()
-		}); token.Wait() && token.Error() != nil {
-			// Handle subscription error
-			log.Println("Subscription error:", token.Error())
+        	defer s.mutex.Unlock()
+
+	        // Parse the payload
+    	    var payloadData map[string]interface{} // Use this line if the structure is dynamic
+        	// var payloadData SensorData // Use this line if the structure is known
+        	err := json.Unmarshal(msg.Payload(), &payloadData)
+        	if err != nil {
+            	log.Println("Error parsing JSON payload:", err)
+            	return
+        	}
+	        s.latestMessage = payloadData // Store the parsed data
+    	}); token.Wait() && token.Error() != nil {
+        	// Handle subscription error
+        	log.Println("Subscription error:", token.Error())
 		}
-	}()
+		}()
 
 	return nil
 }
