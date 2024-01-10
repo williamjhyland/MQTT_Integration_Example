@@ -1,4 +1,4 @@
-module MQTT
+module github.com/williamjhyland/MQTT_Integration_Example
 
 go 1.21.5
 

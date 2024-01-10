@@ -1,4 +1,4 @@
-package MQTT_Client
+package myMQTTClient
 
 import (
 	"context"
