@@ -9,5 +9,5 @@
       "api": "rdk:component:sensor"
     }
   ],
-  "entrypoint": "run.sh"
+  "entrypoint": "MQTT_Integration_Example"
 }
