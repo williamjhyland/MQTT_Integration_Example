@@ -151,7 +151,7 @@ func (s *MQTT_Client) InitMQTTClient(ctx context.Context) error {
 	// Create a client and connect to the broker
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", s.Host, s.Port))
-	opts.SetClientID("your_client_id") // Set a unique client ID
+	// opts.SetClientID("your_client_id") // Set a unique client ID
 
 	s.client = mqtt.NewClient(opts)
 	if token := s.client.Connect(); token.Wait() && token.Error() != nil {
