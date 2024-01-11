@@ -24,7 +24,7 @@ var errUnimplemented = errors.New("unimplemented")
 
 // Your model's colon-delimited-triplet (acme:demo:mybase). acme = namespace, demo = repo-name, mybase = model name
 // If you plan to upload this module to the Viam registry, "acme" must match your Viam registry namespace.
-var Model = resource.NewModel("bill", "mqtt-go", "json-go")
+var Model = resource.NewModel("bill", "mqtt", "json")
 
 // Maps JSON component configuration attributes.
 type Config struct {
